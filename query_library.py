@@ -7,10 +7,15 @@ import pandas as pd
 database_path = "/data1/agile_access/isaccheo/master.db"
 
 def query_available_patches():
-    conn = sqlite3.connect(database_path)
     query = """SELECT DISTINCT patch FROM Object"""
-    patches = pd.read_sql(query, conn)["patch"].to_list()
+    patches = query_agile(query)["patch"].to_list()
     return patches
+
+def query_available_tracts():
+    query = """SELECT DISTINCT tract FROM Object"""
+    tracts = query_agile(query)["tract"].to_list()
+    return tracts
+
 
 
 def get_table_names():
@@ -34,7 +39,7 @@ def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
             temp.append(f"{band}_extendedness")
         column_to_query.extend(temp)
     column_to_query = ", ".join(column_to_query)
-    conn = sqlite3.connect(database_path)
+    
 
     if isinstance(patch, (list, tuple)):
         placeholders = ",".join("?" for _ in patch)
@@ -54,20 +59,19 @@ def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
                 """
         params = [patch, max_rows]
 
-    table = pd.read_sql(query, conn, params=params)  
-    conn.close()
+    table = query_agile(query, params = params)
     return table  
 
 
 def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=None,
                                          difference_flux = False):
-    conn = sqlite3.connect(database_path)
     if not difference_flux:
         query = """
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr
         FROM ForcedSource AS f
         JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
+        AND f.detect_isPrimary = 1
         """
         params = [snr]
     else:
@@ -77,6 +81,7 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
         FROM ForcedSource AS f
         JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
+        AND f.detect_isPrimary = 1
         """
         params = []
 
@@ -102,15 +107,13 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
         query += " LIMIT ?"
         params.append(max(1, int(max_rows)))
 
-    table = pd.read_sql(query, conn, params=params)
-    conn.close()
+    table = query_agile(query, params=params)
     return table
 
 
 
 def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band = None,
                                        difference_flux = False):
-    conn = sqlite3.connect(database_path)
     if not difference_flux:
         query = """
             SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr,
@@ -124,6 +127,7 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             JOIN CcdVisit as ccd USING (ccdVisitId)
             JOIN Object as o USING (objectId)
             WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
+            AND f.detect_isPrimary = 1
             """
         params = [snr]
 
@@ -141,6 +145,7 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             JOIN CcdVisit as ccd USING (ccdVisitId)
             JOIN Object as o USING (objectId)
             WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
+            AND f.detect_isPrimary = 1
             """
         params = []
     
@@ -166,8 +171,7 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
         query += " LIMIT ?"
         params.append(max(1, int(max_rows)))
 
-    table = pd.read_sql(query, conn, params=params)
-    conn.close()
+    table = query_agile(query, params=params)
     return table
 
 
