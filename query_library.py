@@ -2,9 +2,9 @@ import sqlite3
 import pandas as pd
 
 
-#database_path = "../DATA/master.db"
-#database_path = "/beegfs/AGILE/agile/data/catalog/dr1_new_new/db/20250703/master.db"
-database_path = "/staff1/saccheo/agile/master.db"
+
+database_path = "/lsst_data/aviitanen/agile/data/catalog/dr1_new_new/db/20250725/master.db"
+#database_path = "/staff1/saccheo/agile/master.db" #amuse
 
 def query_agile(query, params = None):
     conn = sqlite3.connect(database_path)

@@ -203,16 +203,17 @@ def extraction_routine(args, patch, filename, savedir):
     feature_tables = Parallel(n_jobs=args.jobs_number)(delayed(feature_extract)(
          object_df, feats_ls, user_funcs, min_Npoints = args.nobs_min) for object_df in forced_photometry_tables)
     toc = time.perf_counter()
-
     print(f"Computed features in {(toc-tic)/3600} hours")
+    
     #remove none; combine returned dfs into one and round to 8 decimals
     feature_tables_clean = [feature_table for feature_table in feature_tables if feature_table is not None]
-    feature_df = pd.concat(feature_tables_clean).round(8)
-
-    metadata = get_metadata(args=args, patch = patch, time_required = (toc-tic)/3600 )
-    feature_df = pa.Table.from_pandas(feature_df)
-    feature_df = feature_df.replace_schema_metadata({**feature_df.schema.metadata, **metadata})
-    pq.write_table(feature_df, os.path.join(savedir, filename))
+    
+    if len(feature_tables_clean)>1:
+        feature_df = pd.concat(feature_tables_clean).round(8)
+        metadata = get_metadata(args=args, patch = patch, time_required = (toc-tic)/3600 )
+        feature_df = pa.Table.from_pandas(feature_df)
+        feature_df = feature_df.replace_schema_metadata({**feature_df.schema.metadata, **metadata})
+        pq.write_table(feature_df, os.path.join(savedir, filename))
 
 def main():
     today = datetime.date.today().isoformat()

@@ -114,7 +114,7 @@ def extraction_routine(args, patch, filename, savedir):
 
 def main():
     today = datetime.date.today().isoformat()
-    main_save_dir = "/staff1/saccheo/agile"
+    main_save_dir = "/data1/isaccheo"
     args = add_parser()
     extra_dir  = "diff" if args.difference else "normal"
     savedir = os.path.join(main_save_dir, "summary_features", extra_dir, today)
