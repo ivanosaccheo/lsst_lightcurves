@@ -74,6 +74,8 @@ def extraction_routine(args, patch, filename, savedir):
     forced_photometry_tables = celib.read_forced_photometry(patch = patch, SNR_minimum=args.snr_min, 
                                                             coadd= args.difference, 
                                                             difference_flux=args.difference)
+    if len(forced_photometry_tables)<1:
+        return
     tic = time.perf_counter()
     forced_photometry_tables = Parallel(n_jobs=args.jobs_number)(delayed(celib.split_bands)(object_df)
                                                                  for object_df in forced_photometry_tables)
@@ -112,7 +114,7 @@ def extraction_routine(args, patch, filename, savedir):
 
 def main():
     today = datetime.date.today().isoformat()
-    main_save_dir = "/data1/isaccheo"
+    main_save_dir = "/staff1/saccheo/agile"
     args = add_parser()
     extra_dir  = "diff" if args.difference else "normal"
     savedir = os.path.join(main_save_dir, "summary_features", extra_dir, today)
