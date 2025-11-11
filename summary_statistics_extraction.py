@@ -53,6 +53,8 @@ def add_parser():
                         nargs='?', type = int, const = 20, default = 20)
     parser.add_argument('-d', '--difference', help= "Use force photometry fluxes extracted from difference images",
                     action='store_true')
+    parser.add_argument('-p', "--psf_stars", help = "Minimum number of psf stars required to keep a visit. Default is 1",
+                        nargs='?', type = int, const = 1, default = 1)
     args = parser.parse_args()
     
     return args
@@ -65,6 +67,7 @@ def get_metadata(args, patch, time_required):
                 "patch" : str(patch),
                 "SNR_min" : str(args.snr_min),
                 "Difference_Fluxes" : str(args.difference),
+                "PSF_stars" : str(args.psf_stars),
                 "N_core" : str(args.jobs_number)}
     return metadata
 
@@ -73,7 +76,8 @@ def get_metadata(args, patch, time_required):
 def extraction_routine(args, patch, filename, savedir):
     forced_photometry_tables = celib.read_forced_photometry(patch = patch, SNR_minimum=args.snr_min, 
                                                             coadd= args.difference, 
-                                                            difference_flux=args.difference)
+                                                            difference_flux=args.difference,
+                                                            npsf_star=args.psf_stars)
     if len(forced_photometry_tables)<1:
         return
     tic = time.perf_counter()

@@ -32,7 +32,7 @@ def sigma_clip(mag, magerr, num_sigma=5):
     """Clip light curve based on deviations from median"""
     med = np.median(mag)
     sigma = 0.6745 * np.median(np.abs(mag - med))
-    res = mag - med
+    res = np.abs(mag - med)
     return res - magerr < num_sigma*sigma
 
 
@@ -144,6 +144,9 @@ def add_parser():
                     action='store_true')
     parser.add_argument('-v', '--variance', help= "Use errors computed from variance as a function of magnitudes",
                     action='store_true')
+    parser.add_argument('-p', "--psf_stars", help = "Minimum number of psf stars required to keep a visit. Default is 1",
+                        nargs='?', type = int, const = 1, default = 1)
+    
     args = parser.parse_args()
     
     return args
@@ -158,6 +161,7 @@ def get_metadata(args, patch, time_required):
                 "N_obs_min" : str(args.nobs_min),
                 "Difference_Fluxes" : str(args.difference),
                 "Variance_Error" : str(args.variance),
+                "PSF_stars" : str(args.psf_stars),
                 "N_core" : str(args.jobs_number)}
     return metadata
 
@@ -166,7 +170,8 @@ def get_metadata(args, patch, time_required):
 def extraction_routine(args, patch, filename, savedir):
     forced_photometry_tables = celib.read_forced_photometry(patch = patch, SNR_minimum=args.snr_min, 
                                                             coadd= (args.variance or args.difference), 
-                                                                    difference_flux=args.difference)
+                                                                    difference_flux=args.difference,
+                                                                    npsf_star=args.psf_stars)
     
     tic = time.perf_counter()
     forced_photometry_tables = Parallel(n_jobs=args.jobs_number)(delayed(celib.split_bands)(object_df)

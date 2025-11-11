@@ -69,10 +69,11 @@ def convert_to_mag(df):
     return new_df
 
 
-def read_forced_photometry(patch = 23, SNR_minimum = 5, coadd = False, difference_flux = False):
+def read_forced_photometry(patch = 23, SNR_minimum = 5, coadd = False, difference_flux = False,
+                           npsf_star = 1):
     
     forced_df = qlib.query_force_photometry(patch = patch, snr = SNR_minimum, coadd = coadd, 
-                                            difference_flux = difference_flux)
+                                            difference_flux = difference_flux, npsf_star = npsf_star)
     
     fdfs = [group_df for _, group_df in forced_df.groupby('objectId')] #forced table is splitted in many tables according to objectId
     return fdfs 

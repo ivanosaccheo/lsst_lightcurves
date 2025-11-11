@@ -36,11 +36,11 @@ def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
     for band in "ugrizy":
         temp = []
         if keep_psf:
-            temp.extend([f"{band}_psfFlux", f"{band}_psfFluxErr"])
+            temp.extend([f"{band}_psfFlux", f"{band}_psfFluxErr", f"{band}_psfFlux_flag" ])
         if keep_cmodel:
-            temp.extend([f"{band}_cModelFlux", f"{band}_cModelFluxErr"])
+            temp.extend([f"{band}_cModelFlux", f"{band}_cModelFluxErr", f"{band}_cModelFluxErr"])
         if keep_extendedness: 
-            temp.append(f"{band}_extendedness")
+            temp.extend([f"{band}_extendedness", f"{band}_extendedness_flag"])
         column_to_query.extend(temp)
     column_to_query = ", ".join(column_to_query)
 
@@ -67,26 +67,32 @@ def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
 
 
 def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=None,
-                                         difference_flux = False):
+                                         difference_flux = False, npsf_star = 1):
     if not difference_flux:
         query = """
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr
         FROM ForcedSource AS f
-        JOIN CcdVisit AS ccd USING (ccdVisitId)
+        LEFT JOIN (
+            SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
+            FROM CcdVisit) AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
+        AND ccd.nPsfStar >= ?
         AND f.detect_isPrimary = 1 
         """
-        params = [snr]
+        params = [snr, npsf_star]
     else:
         query = """
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
         f.psfDiffFluxErr AS psfFluxErr
         FROM ForcedSource AS f
-        JOIN CcdVisit AS ccd USING (ccdVisitId)
+        LEFT JOIN (
+            SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
+            FROM CcdVisit) AS ccd USING (ccdVisitId)
         WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
+        AND ccd.nPsfStar >= ?
         AND f.detect_isPrimary = 1 
         """
-        params = []
+        params = [npsf_star]
 
     if patch is not None:
         if isinstance(patch, (list, tuple)):
@@ -116,7 +122,7 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
 
 
 def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band = None,
-                                       difference_flux = False):
+                                       difference_flux = False, npsf_star = 1):
     if not difference_flux:
         query = """
             SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr,
@@ -127,12 +133,15 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             o.z_psfFlux AS z_coadd,
             o.y_psfFlux AS y_coadd
             FROM ForcedSource as f
-            JOIN CcdVisit as ccd USING (ccdVisitId)
+            LEFT JOIN (
+                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
+                FROM CcdVisit) AS ccd USING (ccdVisitId)
             JOIN Object as o USING (objectId)
             WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
+            AND ccd.nPsfStar >= ?
             AND f.detect_isPrimary = 1 
             """
-        params = [snr]
+        params = [snr, npsf_star]
 
     else: 
         query = """
@@ -145,12 +154,15 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             o.z_psfFlux AS z_coadd,
             o.y_psfFlux AS y_coadd
             FROM ForcedSource as f
-            JOIN CcdVisit as ccd USING (ccdVisitId)
+            LEFT JOIN (
+                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
+                FROM CcdVisit) AS ccd USING (ccdVisitId)
             JOIN Object as o USING (objectId)
             WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
+            AND ccd.nPsfStar >= ?
             AND f.detect_isPrimary = 1 
             """
-        params = []
+        params = [npsf_star]
     
     if patch is not None:
         if isinstance(patch, (list, tuple)):
@@ -179,20 +191,23 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
 
 
 def query_force_photometry(snr = 5, patch = 23, max_rows = None, band = None,
-                            coadd = False, difference_flux = False):
+                            coadd = False, difference_flux = False, npsf_star = 1):
     
     if coadd:
         table = query_force_photometry_with_coadd(snr=snr, patch=patch, max_rows = max_rows,
-                                                  band = band, difference_flux=difference_flux)
+                                                  band = band, difference_flux=difference_flux,
+                                                  npsf_star = npsf_star)
     else:
         table = query_force_photometry_without_coadd(snr=snr, patch=patch, max_rows = max_rows,
-                                                  band = band, difference_flux=difference_flux)
+                                                  band = band, difference_flux=difference_flux,
+                                                  npsf_star = npsf_star)
         
     return table
 
 
 def query_truth_table(max_rows = None, 
-                      columns = ["ID", "Z", "M", "is_optical_type2", "is_agn",
+                      coord_cut = True, 
+                      columns = ["ID", "RA", "DEC", "Z", "M", "is_optical_type2", "is_agn",
                       "[lsst-u_total]", "[lsst-g_total]","[lsst-r_total]", "[lsst-i_total]",
                       "[lsst-z_total]", "[lsst-y_total]"]):
     
@@ -212,6 +227,11 @@ def query_truth_table(max_rows = None,
            JOIN MatchesTruth AS m ON Truth.ID=m.match_id
            """
     params = None
+    
+    if coord_cut:
+        query += " WHERE Truth.RA > 149.31 AND Truth.DEC < 150.81"
+        query += " AND Truth.DEC > 1.45 AND  Truth.DEC < 3.01"
+
     if max_rows is not None:
         query += " LIMIT ?"
         params = [max(1, int(max_rows))]
@@ -219,28 +239,34 @@ def query_truth_table(max_rows = None,
     return table
 
 def query_lightcurve(objectid, snr=5, band=None, max_rows=None,
-                                    difference_flux = False):
+                     difference_flux = False, npsfstar = 0):
     if not difference_flux:
         query = f"""
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr
         FROM ForcedSource AS f
-        JOIN CcdVisit AS ccd USING (ccdVisitId)
+        LEFT JOIN (
+                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
+                FROM CcdVisit) AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
         AND f.detect_isPrimary = 1 
         AND f.objectId = ?
+        AND ccd.nPsfStar >= ?
         """
-        params = [snr, int(objectid)]
+        params = [snr, int(objectid), npsfstar]
     else:
         query = """
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
         f.psfDiffFluxErr AS psfFluxErr
         FROM ForcedSource AS f
-        JOIN CcdVisit AS ccd USING (ccdVisitId)
+        LEFT JOIN (
+                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
+                FROM CcdVisit) AS ccd USING (ccdVisitId)
         WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
         AND f.detect_isPrimary = 1 
         AND f.objectId = ?
+        AND ccd.nPsfStar >= ?
         """
-        params = [int(objectid)]
+        params = [int(objectid), npsfstar]
 
     if band is not None:
         if isinstance(band, (list, tuple)):
