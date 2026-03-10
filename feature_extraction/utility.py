@@ -4,7 +4,7 @@ import os
 import glob 
 import catalog_extraction_library as celib 
 from astropy.stats import sigma_clipped_stats
-from scipy.stats import binned_statistic,  median_abs_deviation
+from scipy.stats import binned_statistic,  median_abs_deviation, binned_statistic_2d
 from scipy.interpolate import interp1d
 import healsparse
 import query_library as qlib
@@ -31,26 +31,26 @@ def get_variable_label(truth_df):
     var_label[truth_df["ID"].isin(eclipsing_binary)] =1 # variable star
     var_label[label == 2] = 2
     var_label[label == 3] = 3
-    return var_label
+    return var_label 
 
 
-def get_features_table(path = "/data1/isaccheo/summary_features/diff/2025-11-06",
+def get_features_table(path = "/data1/isaccheo/standard_features/2025-11-11",
                        change_nepochs = True):
     features = []
     for name in os.listdir(path):
         fname = os.path.join(path, name)
         features.append(pd.read_parquet(fname))
-    features = pd.concat(features)
-    try:
-        features.columns = ['_'.join([feature, band]) if feature != 'objectId' else 'objectId' for feature, band in features.columns]
-    except ValueError:
-        pass
-
-    if change_nepochs:
-        for band in "ugrizy":
-            select = np.isnan(features[f"Pvar_{band}"])
-            features.loc[select, f"n_epochs_{band}"] = 0
-    return features
+    if len(features)>1:
+        features = pd.concat(features)
+        try:
+            features.columns = ['_'.join([feature, band]) if feature != 'objectId' else 'objectId' for feature, band in features.columns]
+        except ValueError:
+            pass
+        if change_nepochs:
+            for band in "ugrizy":
+                select = np.isnan(features[f"Pvar_{band}"])
+                features.loc[select, f"n_epochs_{band}"] = 0
+        return features
 
 def clipped_mean(x, sigma = 5):
     mean, _, _ = sigma_clipped_stats(x, sigma= sigma, maxiters=5)
@@ -135,7 +135,7 @@ def select_variable_with_std(table, band = "r",  Nsigma = 3, clipping_sigma = 5,
 
 def get_Nsigma_line(table, xarray = np.linspace(14,28),
                     band = "r", 
-                     Nsigma = 3, clipping_sigma = 5,
+                    Nsigma = 3, clipping_sigma = 5,
                     bins = np.arange(14, 27, 0.33),
                     mean_func = "mean", interpolate = False):
     mag = celib.flux_to_mag(table[f"{band}_psfFlux"])
@@ -186,24 +186,27 @@ def get_false_positives(labels, selected, target_label=3):
     return np.sum(selected & false)
 
 
-def get_completeness_precision_curve(df, band = "r", mag_cuts = np.arange(15, 28, 1),
+def get_completeness_precision_curve(df, parameter_name = "r", bins = np.arange(15, 28, 1),
                                      cumulative = False, target_label = 3,
                                      label_name = "label", selected_name = "std_selected"):
-    
-    mags = celib.flux_to_mag(df[f"{band}_psfFlux"])
-    completeness, precision, N, mag_mean = [], [], [], []
-    for mlow, mhigh in zip(mag_cuts[:-1], mag_cuts[1:]):
+
+    if parameter_name in ("ugrizy"):
+        values = celib.flux_to_mag(df[f"{parameter_name}_psfFlux"])
+    else:
+        values = df[parameter_name].to_numpy()
+    completeness, precision, N, value_mean = [], [], [], []
+    for bin_low, bin_high in zip(bins[:-1], bins[1:]):
         if cumulative:
-            logic = mags < mhigh
+            logic = values < bin_high
         else:
-            logic = (mags < mhigh) & (mags >= mlow)
+            logic = (values < bin_high) & (values>= bin_low)
         labels, selected = df[label_name][logic].to_numpy(), df[selected_name][logic].to_numpy()
         completeness.append(get_completeness(labels, selected, target_label = target_label))
         precision.append(get_precision(labels, selected, target_label = target_label))
         N.append(get_N_positives(labels, target_label = target_label))
-        mag_mean.append(np.nanmedian(mags[logic]))
+        value_mean.append(np.nanmedian(values[logic]))
 
-    return np.array(completeness), np.array(precision), np.array(N), np.array(mag_mean)
+    return np.array(completeness), np.array(precision), np.array(N), np.array(value_mean)
 
 def get_metrics_numbers(df, band = "r", mag_cuts = np.arange(15, 28, 1),
                         cumulative = False, target_label = 3,
@@ -279,6 +282,123 @@ def mask_nearby_stars(table, band = "r", star_mag = [9, 11.5], sep_radius = [2,1
     return masked
 
 
+def get_binned_metric_2d(real, predicted, xvalues, yvalues, 
+                         metric = "completeness",  xbins = 10, ybins = 10):
+    
+    real = real.astype(bool)
+    predicted = predicted.astype(bool)
+
+    tp = np.logical_and(real, predicted).astype(int)
+    fn = np.logical_and(real,  ~predicted).astype(int)
+    fp = np.logical_and(~real, predicted).astype(int)
+    
+    if metric != "count":
+        tp_bin, xedges, yedges, _ = binned_statistic_2d(xvalues, yvalues, tp, statistic = "sum", bins=(xbins, ybins))
+        fn_bin, _, _, _ = binned_statistic_2d(xvalues, yvalues, fn, statistic = "sum", bins=(xbins, ybins))
+        fp_bin, _, _, _ = binned_statistic_2d(xvalues, yvalues, fp, statistic = "sum", bins=(xbins, ybins))
+
+    if metric == "completeness":
+        denom = tp_bin + fn_bin 
+        statistic = np.where(denom > 0, tp_bin/denom, np.nan)
+
+    elif metric == "precision":
+        denom = tp_bin + fp_bin 
+        statistic = np.where(denom > 0, tp_bin/denom, np.nan)
+
+    elif metric == "count":
+        statistic, xedges, yedges, _ = binned_statistic_2d(xvalues, yvalues, np.ones_like(xvalues), 
+                                                           statistic = "count", bins=(xbins, ybins))
+    
+    elif metric == "count_true":
+        statistic = tp_bin + fn_bin 
+    
+    elif metric == "count_predicted":
+        statistic = tp_bin + fp_bin 
+
+    else:
+        raise ValueError(f"""'metric' must be one of: 'completeness', 'precision', 
+                                                       'count', 'count_true', 'count_predicted'""")
+    
+    return statistic, xedges, yedges
 
 
 
+def get_binned_metric(true, predicted, xvalues, metric = "completeness",  bins = 10):
+    
+    true = true.astype(bool)
+    predicted = predicted.astype(bool)
+
+    tp = np.logical_and(true, predicted).astype(int)
+    fn = np.logical_and(true,  ~predicted).astype(int)
+    fp = np.logical_and(~true, predicted).astype(int)
+    
+    if metric != "count":
+        tp_bin, xedges, _ = binned_statistic(xvalues, tp, statistic = "sum", bins=bins)
+        fn_bin, _, _ = binned_statistic(xvalues, fn, statistic = "sum", bins=bins)
+        fp_bin, _, _ = binned_statistic(xvalues, fp, statistic = "sum", bins=bins)
+    
+    if metric == "completeness":
+        denom = tp_bin + fn_bin 
+        statistic = np.where(denom > 0, tp_bin/denom, np.nan)
+
+    elif metric == "precision":
+        denom = tp_bin + fp_bin 
+        statistic = np.where(denom > 0, tp_bin/denom, np.nan)
+    
+    elif metric == "count":
+        statistic, xedges, _ = binned_statistic(xvalues, np.ones_like(xvalues), statistic = "count", bins=bins)
+
+    elif metric == "count_true":
+        statistic = tp_bin + fn_bin 
+    
+    elif metric == "count_predicted":
+        statistic = tp_bin + fp_bin 
+
+    else:
+        raise ValueError(f"""'metric' must be one of: 'completeness', 'precision', 
+                                                       'count', 'count_true', 'count_predicted'""")
+    
+    return statistic, xedges
+
+
+def update_sigma_df(table, band = "r",  clipping_sigma = 5,
+                    bins = np.arange(14, 27, 0.33),
+                    mean_func = "mean", interpolate = False):
+    
+    mag = celib.flux_to_mag(table[f"{band}_psfFlux"])
+    std =  table[f"std_{band}"].to_numpy()
+
+    binned_mean, _, edges = get_mean_std_bins(mag, std, mean_func = mean_func, 
+                                       clipping_sigma = clipping_sigma, bins = bins)
+
+    select = (table["label"] == 2) |  (table["label"] == 3) 
+
+    phot_sigma2, intrins_sigma2 = get_photometric_and_intrinsic_variability(mag[select], std[select],
+                                                                        bins=bins, edges=edges, 
+                                                                        binned_mean =binned_mean, 
+    
+    
+    
+                                                                       interpolate = interpolate)
+    new_sigma = np.sqrt(intrins_sigma2*(table.loc[select, "Z"]+1) + phot_sigma2)
+    new_sigma = np.where(intrins_sigma2>0, new_sigma, std[select])
+    new_df = table.copy()
+    new_df.loc[select, f"std_{band}" ] = new_sigma
+    return new_df
+
+def get_photometric_and_intrinsic_variability(mag, std, bins, edges, binned_mean,
+                              interpolate = False):
+    if interpolate:
+        xpos = 0.5*(edges[:-1]+edges[1:])
+        f = interp1d(xpos, binned_mean, bounds_error=False, fill_value= np.nan)
+        photometric_variability = f(mag)
+    else:
+        bin_idx = np.digitize(mag, bins=bins) - 1
+        valid = (bin_idx >= 0) & (bin_idx < len(binned_mean))
+        photometric_variability = np.full(len(mag), np.nan)
+        photometric_variability[valid] = binned_mean[bin_idx[valid]]
+    
+    intrinsic_variability = np.maximum(std**2-photometric_variability**2, 0)
+ 
+    return photometric_variability**2, intrinsic_variability
+     

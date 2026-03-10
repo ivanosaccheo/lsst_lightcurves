@@ -72,9 +72,7 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
         query = """
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr
         FROM ForcedSource AS f
-        LEFT JOIN (
-            SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
-            FROM CcdVisit) AS ccd USING (ccdVisitId)
+        JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
         AND ccd.nPsfStar >= ?
         AND f.detect_isPrimary = 1 
@@ -85,9 +83,7 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
         f.psfDiffFluxErr AS psfFluxErr
         FROM ForcedSource AS f
-        LEFT JOIN (
-            SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
-            FROM CcdVisit) AS ccd USING (ccdVisitId)
+        JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
         AND ccd.nPsfStar >= ?
         AND f.detect_isPrimary = 1 
@@ -133,9 +129,7 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             o.z_psfFlux AS z_coadd,
             o.y_psfFlux AS y_coadd
             FROM ForcedSource as f
-            LEFT JOIN (
-                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
-                FROM CcdVisit) AS ccd USING (ccdVisitId)
+            JOIN CcdVisit AS ccd USING (ccdVisitId)
             JOIN Object as o USING (objectId)
             WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
             AND ccd.nPsfStar >= ?
@@ -154,10 +148,8 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             o.z_psfFlux AS z_coadd,
             o.y_psfFlux AS y_coadd
             FROM ForcedSource as f
-            LEFT JOIN (
-                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
-                FROM CcdVisit) AS ccd USING (ccdVisitId)
-            JOIN Object as o USING (objectId)
+            JOIN CcdVisit AS ccd USING (ccdVisitId)
+            JOIN Object AS o USING (objectId)
             WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
             AND ccd.nPsfStar >= ?
             AND f.detect_isPrimary = 1 
@@ -244,9 +236,7 @@ def query_lightcurve(objectid, snr=5, band=None, max_rows=None,
         query = f"""
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfFlux, f.psfFluxErr
         FROM ForcedSource AS f
-        LEFT JOIN (
-                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
-                FROM CcdVisit) AS ccd USING (ccdVisitId)
+        JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
         AND f.detect_isPrimary = 1 
         AND f.objectId = ?
@@ -258,9 +248,7 @@ def query_lightcurve(objectid, snr=5, band=None, max_rows=None,
         SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
         f.psfDiffFluxErr AS psfFluxErr
         FROM ForcedSource AS f
-        LEFT JOIN (
-                SELECT DISTINCT ccdVisitId, expMidptMJD, nPsfStar
-                FROM CcdVisit) AS ccd USING (ccdVisitId)
+        JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
         AND f.detect_isPrimary = 1 
         AND f.objectId = ?

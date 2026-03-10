@@ -1,4 +1,8 @@
-.myenv
-*.ipynb
+.myenv/
+*.pyc
+abacus.ipynb
+test.ipynb
 __pycache__  
+
+
 
