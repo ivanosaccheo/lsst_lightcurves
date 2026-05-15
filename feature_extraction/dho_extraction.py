@@ -81,11 +81,8 @@ def dho_extract(object_df, bands, clip=True, min_Npoints = 5, n_iter=5, n_opt =2
             continue
         N_points = len(flux)
         result_array[start+5] = N_points
-       
-        try:
-            result_array[start:start+5] = fit_dho(mjd, flux, flux_err, n_iter=n_iter, n_opt = n_opt)
-        except Exception as e:
-            print(e)
+        result_array[start:start+5] = fit_dho(mjd, flux, flux_err, n_iter=n_iter, n_opt = n_opt)
+
     
     return result_array
 
