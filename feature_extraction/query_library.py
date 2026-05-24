@@ -32,7 +32,7 @@ def get_table_names():
 def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
                            keep_cmodel = True, keep_extendedness = True, max_rows = 1e10):
     
-    column_to_query = ["objectId", "refExtendedness", "detect_isPrimary"]
+    column_to_query = ["objectId", "refExtendedness", "refBand", "detect_isPrimary"]
     for band in "ugrizy":
         temp = []
         if keep_psf:
@@ -221,7 +221,7 @@ def query_truth_table(max_rows = None,
     params = None
     
     if coord_cut:
-        query += " WHERE Truth.RA > 149.31 AND Truth.DEC < 150.81"
+        query += " WHERE Truth.RA > 149.31 AND Truth.RA < 150.81"
         query += " AND Truth.DEC > 1.45 AND  Truth.DEC < 3.01"
 
     if max_rows is not None:
